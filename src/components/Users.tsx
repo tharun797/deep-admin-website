@@ -79,14 +79,15 @@ const Users: React.FC = () => {
   };
 
   const handleDelete = async (userId: string) => {
-    try {
-      await userService.deleteUser(userId);
-      setUsers(users.filter(user => user.id !== userId));
-      handleCloseModal();
-    } catch (err) {
-      console.error('Error deleting user:', err);
-      alert('Failed to delete user. Please try again.');
-    }
+      console.log('Delete user:', userId);
+    // try {
+    //   await userService.deleteUser(userId);
+    //   setUsers(users.filter(user => user.id !== userId));
+    //   handleCloseModal();
+    // } catch (err) {
+    //   console.error('Error deleting user:', err);
+    //   alert('Failed to delete user. Please try again.');
+    // }
   };
 
   const getFirstImage = (user: FirestoreUser): string => {

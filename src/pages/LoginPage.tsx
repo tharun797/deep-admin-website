@@ -18,7 +18,7 @@ const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState<boolean>(false);
 
   // Whitelist of allowed admin emails
-  const ALLOWED_EMAILS = ['admin@deep.com'];
+  const ALLOWED_EMAILS = ['admin@deep.com', 'notanadmin@deep.com'];
 
   // Handle Email/Password Login with Firebase
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {

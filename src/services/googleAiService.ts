@@ -14,8 +14,9 @@ export class GoogleAiService {
     const genAI = new GoogleGenerativeAI(ApiKeys.geminiApiKey);
 
     this.model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash",
-    });
+  model: "gemini-3-flash-preview",
+});
+
 
     this.aiServiceHelper = new AiServiceHelper();
   }

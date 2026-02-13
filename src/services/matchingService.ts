@@ -316,21 +316,21 @@ export class MatchingService {
       );
 
       try {
-        const matchedid = matches[0].profile.id!;
+        const matchedUserId = matches[0].profile.id!;
         const matchedUserFcmToken = matches[0].profile.fcmToken ?? '';
         const matchDocRef = doc(collection(db, "matches"));
 
         // Update first user
         const userRef = doc(db, 'users', id);
         batch.update(userRef, {
-          matchedid: matchedid,
+          matchedUserId: matchedUserId,
           matchId: matchDocRef.id,
         });
 
         // Update matched user
-        const matchedUserRef = doc(db, 'users', matchedid);
+        const matchedUserRef = doc(db, 'users', matchedUserId);
         batch.update(matchedUserRef, {
-          matchedid: id,
+          matchedUserId: id,
           matchId: matchDocRef.id,
         });
 
@@ -342,7 +342,7 @@ export class MatchingService {
         });
 
         // Add to first user's history
-        const user1HistoryRef = doc(db, "users", id, "history", matchedid);
+        const user1HistoryRef = doc(db, "users", id, "history", matchedUserId);
 
         batch.set(user1HistoryRef, {
           matchedAt: new Date(),
@@ -350,7 +350,7 @@ export class MatchingService {
         });
 
         // Add to matched user's history
-        const user2HistoryRef = doc(db, "users", matchedid, "history", id);
+        const user2HistoryRef = doc(db, "users", matchedUserId, "history", id);
 
         batch.set(user2HistoryRef, {
           matchedAt: new Date(),
@@ -358,7 +358,7 @@ export class MatchingService {
         });
 
         console.info(
-          `${MatchingService.TAG}: Successfully updated matchedid for user ${id}`
+          `${MatchingService.TAG}: Successfully updated matchedUserId for user ${id}`
         );
 
         // Commit batch and send notifications in parallel
@@ -372,12 +372,12 @@ export class MatchingService {
 
         return matches[0].profile.id ?? '';
       } catch (e) {
-        console.error(`${MatchingService.TAG}: Failed to update matchedid:`, e);
+        console.error(`${MatchingService.TAG}: Failed to update matchedUserId:`, e);
         throw new Error(`Failed to update current match: ${e}`);
       }
     } else {
       console.info(
-        `${MatchingService.TAG}: Best match score (${matches[0].score}) is below 0.6 threshold, not updating matchedid`
+        `${MatchingService.TAG}: Best match score (${matches[0].score}) is below 0.6 threshold, not updating matchedUserId`
       );
       return '';
     }

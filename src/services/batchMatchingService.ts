@@ -15,12 +15,14 @@ import {
 } from "firebase/firestore";
 
 import { MatchingService } from "../services/matchingService";
+import { ResetMatchesService } from "./resetMatchesService";
 // import { ProfileDatabase } from "../db/profileDatabase";
 import { FirestoreUser, UserPromptStatus } from "../types";
 
 export class BatchMatchingService {
   
   private matchingService: MatchingService;
+  private resetMatchesService : ResetMatchesService;
   // private profileDatabase: ProfileDatabase;
   private static readonly TAG = 'EnhancedBatchMatchingService';
 
@@ -29,11 +31,16 @@ export class BatchMatchingService {
 
   constructor() {
     this.matchingService = new MatchingService();
+   this. resetMatchesService = new ResetMatchesService();
     // this.profileDatabase = new ProfileDatabase();
   }
 
   async processAllUsersMatching(): Promise<void> {
     try {
+         await this.resetMatchesService.resetAllMatches();
+
+      
+
       console.info(
         `${BatchMatchingService.TAG}: Starting enhanced batch matching process for all users`
       );
@@ -106,14 +113,15 @@ export class BatchMatchingService {
       );
       console.info(`${BatchMatchingService.TAG}: Free users: ${freeDocs.length}`);
 
-      const kTestMode = process.env.REACT_APP_TEST_MODE === 'true';
-      if (!kTestMode) {
+    //  const kTestMode = import.meta.env.VITE_TEST_MODE === 'true';
+
+      // if (!kTestMode) {
         await setDoc(
           doc(db, "appConfig", "settings"),
           { matchingAlgorithmBegin: true },
           { merge: true }
         );
-      }
+      // }
 
       // Convert Firestore docs to FirestoreUser objects
       const profiles: FirestoreUser[] = [];
@@ -250,12 +258,12 @@ export class BatchMatchingService {
         `${BatchMatchingService.TAG}: Matching process completed. Matched: ${matchedUserIds.size}, Unmatched: ${unmatchedUserIds.length}`
       );
 
-      if (!kTestMode) {
+      // if (!kTestMode) {
         await updateDoc(
           doc(db, "appConfig", "settings"),
           { matchingAlgorithmBegin: false }
         );
-      }
+      // }
     } catch (e) {
       console.error(
         `${BatchMatchingService.TAG}: Error in processAllUsersMatching:`,
