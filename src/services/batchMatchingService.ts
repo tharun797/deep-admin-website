@@ -9,21 +9,19 @@ import {
   writeBatch,
   serverTimestamp,
   deleteField,
-  setDoc,
   updateDoc,
   FieldValue
 } from "firebase/firestore";
 
 import { MatchingService } from "../services/matchingService";
 import { ResetMatchesService } from "./resetMatchesService";
-// import { ProfileDatabase } from "../db/profileDatabase";
+import { MatchConfigService } from "./matchConfigService";
 import { FirestoreUser, UserPromptStatus } from "../types";
 
 export class BatchMatchingService {
   
   private matchingService: MatchingService;
-  private resetMatchesService : ResetMatchesService;
-  // private profileDatabase: ProfileDatabase;
+  private resetMatchesService: ResetMatchesService;
   private static readonly TAG = 'EnhancedBatchMatchingService';
 
   static readonly POTENTIAL_MATCH_MIN_THRESHOLD = 0.5;
@@ -31,19 +29,27 @@ export class BatchMatchingService {
 
   constructor() {
     this.matchingService = new MatchingService();
-   this. resetMatchesService = new ResetMatchesService();
-    // this.profileDatabase = new ProfileDatabase();
+    this.resetMatchesService = new ResetMatchesService();
   }
 
-  async processAllUsersMatching(): Promise<void> {
+  async processAllUsersMatching(adminEmail: string): Promise<number> {
+    let totalMatchedUsers = 0;
+    const startTime = Date.now();
+    
     try {
-         await this.resetMatchesService.resetAllMatches();
+      // Mark matching as started in Firestore
+      await MatchConfigService.startMatching(adminEmail);
 
-      
+      await this.resetMatchesService.resetAllMatches();
 
       console.info(
         `${BatchMatchingService.TAG}: Starting enhanced batch matching process for all users`
       );
+
+      // Phase 1: Initializing (0-10%)
+      await MatchConfigService.updateProgress({
+        status: 'initializing',
+      });
 
       const usersRef = collection(db, "users");
 
@@ -58,7 +64,8 @@ export class BatchMatchingService {
 
       if (usersSnapshot.empty) {
         console.info(`${BatchMatchingService.TAG}: No users found in the database`);
-        return;
+        await MatchConfigService.completeMatching(0, 0);
+        return 0;
       }
 
       await this._resetExistingMatches();
@@ -72,7 +79,7 @@ export class BatchMatchingService {
             doc.data().prioritizeNextMatch === true &&
             doc.data().isPremium === true
         )
-        .sort(() => Math.random() - 0.5); // Shuffle
+        .sort(() => Math.random() - 0.5);
 
       const priorityFreeDocs = allDocs
         .filter(
@@ -80,22 +87,20 @@ export class BatchMatchingService {
             doc.data().prioritizeNextMatch === true &&
             doc.data().isPremium !== true
         )
-        .sort(() => Math.random() - 0.5); // Shuffle
+        .sort(() => Math.random() - 0.5);
 
       const remainingDocs = allDocs.filter(
         (doc) => doc.data().prioritizeNextMatch !== true
       );
 
-      // Further separate remaining users by premium status
       const premiumDocs = remainingDocs
         .filter((doc) => doc.data().isPremium === true)
-        .sort(() => Math.random() - 0.5); // Shuffle
+        .sort(() => Math.random() - 0.5);
 
       const freeDocs = remainingDocs
         .filter((doc) => doc.data().isPremium !== true)
-        .sort(() => Math.random() - 0.5); // Shuffle
+        .sort(() => Math.random() - 0.5);
 
-      // Process in order: Priority Premium -> Premium -> Priority Free -> Free
       const users = [
         ...priorityPremiumDocs,
         ...premiumDocs,
@@ -103,7 +108,9 @@ export class BatchMatchingService {
         ...freeDocs,
       ];
 
-      console.info(`${BatchMatchingService.TAG}: Found ${users.length} users to process`);
+      const totalUsersCount = users.length;
+
+      console.info(`${BatchMatchingService.TAG}: Found ${totalUsersCount} users to process`);
       console.info(
         `${BatchMatchingService.TAG}: Priority Premium users: ${priorityPremiumDocs.length}`
       );
@@ -113,15 +120,11 @@ export class BatchMatchingService {
       );
       console.info(`${BatchMatchingService.TAG}: Free users: ${freeDocs.length}`);
 
-    //  const kTestMode = import.meta.env.VITE_TEST_MODE === 'true';
-
-      // if (!kTestMode) {
-        await setDoc(
-          doc(db, "appConfig", "settings"),
-          { matchingAlgorithmBegin: true },
-          { merge: true }
-        );
-      // }
+      await MatchConfigService.updateProgress({
+        status: 'initializing',
+        totalUsers: totalUsersCount,
+        processedUsers: 0,
+      });
 
       // Convert Firestore docs to FirestoreUser objects
       const profiles: FirestoreUser[] = [];
@@ -129,7 +132,6 @@ export class BatchMatchingService {
         const userId = userDoc.id;
         const userData = userDoc.data();
 
-        // Get user prompts from Firestore
         const userPrompts: UserPromptStatus[] = [];
         try {
           const promptsRef = collection(db, "users", userId, "answeredPrompts");
@@ -163,7 +165,6 @@ export class BatchMatchingService {
           );
         }
 
-        // Create ProfileState object
         profiles.push(
           FirestoreUser.fromMap(userData, userPrompts, userId, history)
         );
@@ -171,23 +172,24 @@ export class BatchMatchingService {
 
       console.info(`${BatchMatchingService.TAG}: Loaded ${profiles.length} profiles into memory`);
 
-      // Track matched and unmatched users
+      // Phase 2: Matching (10-70% of total progress)
+      await MatchConfigService.updateProgress({
+        status: 'matching',
+        totalUsers: totalUsersCount,
+        processedUsers: 0,
+        matchedUsers: 0,
+      });
+
       const matchedUserIds = new Set<string>();
       const unmatchedUserIds: string[] = [];
-      
-      // Keep track of remaining available profiles in memory
       const availableProfiles = new Set<string>(profiles.map(p => p.id!));
 
       // Process matching for each user
+      let processedCount = 0;
       for (const profile of profiles) {
         const userId = profile.id;
         if (!userId) continue;
 
-        if (userId === 'tharun7o7now@gmail.com') {
-          unmatchedUserIds.push(userId);
-        }
-
-        // Skip if this user was already matched in this batch
         if (matchedUserIds.has(userId)) {
           console.info(
             `${BatchMatchingService.TAG}: User ${userId} was already matched in this batch, skipping`
@@ -195,7 +197,6 @@ export class BatchMatchingService {
           continue;
         }
 
-        // Check if this user is still available (might have been matched already)
         if (!availableProfiles.has(userId)) {
           console.info(
             `${BatchMatchingService.TAG}: User ${userId} was already matched, skipping`
@@ -203,21 +204,23 @@ export class BatchMatchingService {
           continue;
         }
 
+        // SET matchingAlgorithmBegin to true for THIS user
+        await updateDoc(doc(db, "users", userId), {
+          matchingAlgorithmBegin: true
+        });
+
         console.info(`${BatchMatchingService.TAG}: Finding matches for user ${userId}`);
 
         try {
-          // Get available profiles for matching (exclude already matched users)
           const candidateProfiles = profiles.filter(
             p => p.id !== userId && availableProfiles.has(p.id!)
           );
 
-          // Call the matching service to find the best match
           const matchedUserId = await this.matchingService.findBestMatchForUser(
             profile,
             candidateProfiles
           );
 
-          // If a match was made, remove both users from available pool and track them
           if (matchedUserId) {
             matchedUserIds.add(userId);
             matchedUserIds.add(matchedUserId);
@@ -228,7 +231,6 @@ export class BatchMatchingService {
               `${BatchMatchingService.TAG}: Match created between ${userId} and ${matchedUserId}`
             );
           } else {
-            // No match found for this user
             unmatchedUserIds.push(userId);
             console.info(`${BatchMatchingService.TAG}: No match found for user ${userId}`);
           }
@@ -237,38 +239,85 @@ export class BatchMatchingService {
             `${BatchMatchingService.TAG}: Error finding match for user ${userId}:`,
             e
           );
-          // Add to unmatched list if there was an error
           unmatchedUserIds.push(userId);
+        } finally {
+          // SET matchingAlgorithmBegin to false for THIS user after matching completes
+          await updateDoc(doc(db, "users", userId), {
+            matchingAlgorithmBegin: false
+          });
+        }
+
+        processedCount++;
+
+        // Update progress every 5 users or at key milestones
+        // Matching phase represents 60% of total (from 10% to 70%)
+        if (processedCount % 5 === 0 || processedCount === totalUsersCount) {
+          const elapsedTime = (Date.now() - startTime) / 1000; // in seconds
+          const avgTimePerUser = elapsedTime / processedCount;
+          const remainingUsers = totalUsersCount - processedCount;
+          // Estimate remaining time including potential matches phase (30%)
+          const matchingTimeRemaining = avgTimePerUser * remainingUsers;
+          const potentialMatchesTime = (elapsedTime / processedCount) * unmatchedUserIds.length * 0.5;
+          const estimatedTimeRemaining = Math.ceil(matchingTimeRemaining + potentialMatchesTime);
+
+          await MatchConfigService.updateProgress({
+            status: 'matching',
+            totalUsers: totalUsersCount,
+            processedUsers: processedCount,
+            matchedUsers: matchedUserIds.size,
+            estimatedTimeRemaining: estimatedTimeRemaining,
+          });
         }
       }
 
       if (profiles.length === 0) {
         console.debug('Profiles are empty');
       } else {
+        // Phase 3: Processing unmatched (70-90% of total progress)
+        await MatchConfigService.updateProgress({
+          status: 'processing_unmatched',
+          totalUsers: totalUsersCount,
+          processedUsers: totalUsersCount,
+          matchedUsers: matchedUserIds.size,
+          unmatchedUsers: unmatchedUserIds.length,
+        });
+
         await this._processPotentialMatchesForUnmatchedUsers(
           unmatchedUserIds,
           profiles
         );
       }
 
-      // Update priority flag for unmatched users
+      // Phase 4: Finalizing (90-100% of total progress)
+      await MatchConfigService.updateProgress({
+        status: 'finalizing',
+        totalUsers: totalUsersCount,
+        processedUsers: totalUsersCount,
+        matchedUsers: matchedUserIds.size,
+        unmatchedUsers: unmatchedUserIds.length,
+      });
+
       await this._updatePriorityForUnmatchedUsers(unmatchedUserIds, matchedUserIds);
 
+      totalMatchedUsers = matchedUserIds.size;
+
       console.info(
-        `${BatchMatchingService.TAG}: Matching process completed. Matched: ${matchedUserIds.size}, Unmatched: ${unmatchedUserIds.length}`
+        `${BatchMatchingService.TAG}: Matching process completed. Matched: ${totalMatchedUsers}, Unmatched: ${unmatchedUserIds.length}`
       );
 
-      // if (!kTestMode) {
-        await updateDoc(
-          doc(db, "appConfig", "settings"),
-          { matchingAlgorithmBegin: false }
-        );
-      // }
+      // Mark matching as completed in Firestore
+      await MatchConfigService.completeMatching(totalMatchedUsers, unmatchedUserIds.length);
+
+      return totalMatchedUsers;
     } catch (e) {
       console.error(
         `${BatchMatchingService.TAG}: Error in processAllUsersMatching:`,
         e
       );
+      
+      // Mark matching as failed
+      // await MatchConfigService.markMatchingFailed(String(e));
+      
       throw e;
     }
   }
@@ -290,21 +339,18 @@ export class BatchMatchingService {
       }
 
       for (const unmatchedUserId of unmatchedUserIds) {
-        // Find the unmatched user's profile
         const unmatchedUser = allProfiles.find(
           (profile) => profile.id === unmatchedUserId
         );
 
         if (!unmatchedUser) continue;
 
-        // Calculate potential matches against ALL users (including matched ones)
         const potentialMatches = await this._findPotentialMatchesForUser(
           unmatchedUser,
           allProfiles
         );
 
         if (potentialMatches.length > 0) {
-          // Store potential matches in separate collection
           await this._storePotentialMatchesInCollection(
             unmatchedUserId,
             potentialMatches
@@ -335,16 +381,13 @@ export class BatchMatchingService {
     potentialMatches: Array<{ userId: string; matchScore: number; calculatedAt: FieldValue }>
   ): Promise<void> {
     try {
-      // Create a batch for storing potential matches
       const batch = writeBatch(db);
       let batchCount = 0;
-      const MAX_BATCH_SIZE = 450; // Safe batch size limit
+      const MAX_BATCH_SIZE = 450;
 
-      // Clear existing potential matches for this user first
       const potentialMatchesRef = collection(db, "users", userId, "potentialMatches");
       const existingMatchesSnapshot = await getDocs(potentialMatchesRef);
 
-      // Delete existing potential matches
       for (const doc of existingMatchesSnapshot.docs) {
         batch.delete(doc.ref);
         batchCount++;
@@ -358,7 +401,6 @@ export class BatchMatchingService {
         }
       }
 
-      // Add new potential matches
       for (const potentialMatch of potentialMatches) {
         const matchRef = doc(
           db,
@@ -380,7 +422,6 @@ export class BatchMatchingService {
         }
       }
 
-      // Update user document with potential matches metadata
       const userRef = doc(db, "users", userId);
       batch.update(userRef, {
         potentialMatchesCount: potentialMatches.length,
@@ -388,7 +429,6 @@ export class BatchMatchingService {
       });
       batchCount++;
 
-      // Commit any remaining operations
       if (batchCount > 0) {
         await batch.commit();
         console.info(
@@ -420,19 +460,15 @@ export class BatchMatchingService {
 
     try {
       for (const candidateProfile of allProfiles) {
-        // Skip self
         if (candidateProfile.id === unmatchedUser.id) continue;
 
-        // Skip if basic compatibility criteria not met
         if (!this._meetsBasicCriteria(unmatchedUser, candidateProfile)) continue;
 
-        // Calculate AI match score
         const matchScore = await this.matchingService.getMatchScoreWithAI(
           unmatchedUser,
           candidateProfile
         );
 
-        // Check if score falls within potential match range
         if (
           matchScore >= BatchMatchingService.POTENTIAL_MATCH_MIN_THRESHOLD &&
           matchScore <= BatchMatchingService.POTENTIAL_MATCH_MAX_THRESHOLD
@@ -449,10 +485,8 @@ export class BatchMatchingService {
         }
       }
 
-      // Sort potential matches by score (descending)
       potentialMatches.sort((a, b) => b.matchScore - a.matchScore);
 
-      // Limit to top 10-15 potential matches to avoid document size limits
       if (potentialMatches.length > 15) {
         const limited = potentialMatches.slice(0, 15);
         console.info(
@@ -472,7 +506,6 @@ export class BatchMatchingService {
 
   private _meetsBasicCriteria(user1: FirestoreUser, user2: FirestoreUser): boolean {
     try {
-      // Age range check - user1's age should fit user2's preferences
       if (
         user1.age == null ||
         user2.minAge == null ||
@@ -485,7 +518,6 @@ export class BatchMatchingService {
         return false;
       }
 
-      // Age range check - user2's age should fit user1's preferences
       if (
         user2.age == null ||
         user1.minAge == null ||
@@ -498,7 +530,6 @@ export class BatchMatchingService {
         return false;
       }
 
-      // Gender preference check - user1 should be interested in user2's gender
       if (
         !user1.interestedIn ||
         user1.interestedIn.length === 0 ||
@@ -511,7 +542,6 @@ export class BatchMatchingService {
         return false;
       }
 
-      // Gender preference check - user2 should be interested in user1's gender
       if (
         !user2.interestedIn ||
         user2.interestedIn.length === 0 ||
@@ -531,9 +561,6 @@ export class BatchMatchingService {
     }
   }
 
-  /**
-   * Updates priority flags for users based on matching results
-   */
   private async _updatePriorityForUnmatchedUsers(
     unmatchedUserIds: string[],
     matchedUserIds: Set<string>
@@ -552,7 +579,6 @@ export class BatchMatchingService {
 
       const batch = writeBatch(db);
 
-      // Set prioritizeNextMatch to true for unmatched users
       for (const userId of unmatchedUserIds) {
         const userRef = doc(db, 'users', userId);
         batch.update(userRef, { prioritizeNextMatch: true });
@@ -561,7 +587,6 @@ export class BatchMatchingService {
         );
       }
 
-      // Remove prioritizeNextMatch flag for successfully matched users
       for (const userId of matchedUserIds) {
         const userRef = doc(db, "users", userId);
         batch.update(userRef, { prioritizeNextMatch: deleteField() });
@@ -576,7 +601,6 @@ export class BatchMatchingService {
       );
     } catch (e) {
       console.error(`${BatchMatchingService.TAG}: Error updating priority flags:`, e);
-      // Don't throw here as this shouldn't break the main matching process
     }
   }
 
@@ -601,9 +625,8 @@ export class BatchMatchingService {
 
       const batch = writeBatch(db);
       let batchCount = 0;
-      const MAX_BATCH_SIZE = 400; // Maximum number of operations in a batch
+      const MAX_BATCH_SIZE = 400;
 
-      // Reset matchedUserId and matchId for all users
       for (const userDoc of usersSnapshot.docs) {
         batch.update(doc(db, 'users', userDoc.id), {
           matchedUserId: null,
@@ -612,7 +635,6 @@ export class BatchMatchingService {
         });
         batchCount++;
 
-        // Commit batch when it gets close to the limit
         if (batchCount >= MAX_BATCH_SIZE) {
           await batch.commit();
           console.info(
@@ -622,7 +644,6 @@ export class BatchMatchingService {
         }
       }
 
-      // Commit any remaining operations
       if (batchCount > 0) {
         await batch.commit();
         console.info(
@@ -635,7 +656,7 @@ export class BatchMatchingService {
       );
     } catch (e) {
       console.error(`${BatchMatchingService.TAG}: Error resetting existing matches:`, e);
-      throw e; // Re-throw as this is a critical step
+      throw e;
     }
   }
 }

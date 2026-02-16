@@ -7,8 +7,9 @@ import Users from '../components/Users';
 import Analytics from '../components/Analytics';
 import Settings from '../components/Settings';
 import Match from '../components/Match';
+import { MatchConfigService } from '../services/matchConfigService';
 
-type TabType = 'overview' | 'users' |'match'| 'analytics' | 'settings';
+type TabType = 'overview' | 'users' | 'match' | 'analytics' | 'settings';
 
 interface Styles {
   container: React.CSSProperties;
@@ -19,16 +20,63 @@ interface Styles {
   headerActions: React.CSSProperties;
   headerBtn: React.CSSProperties;
   primaryBtn: React.CSSProperties;
+  lastRunBadge: React.CSSProperties;
 }
 
 const Dashboard: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [lastRun, setLastRun] = useState<string>('Never');
+  const [duration, setDuration] = useState<string>('N/A');
+
+  const formatTimeAgo = (date: Date): string => {
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+    if (diffInSeconds < 60) {
+      return `${diffInSeconds}s ago`;
+    }
+
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    if (diffInMinutes < 60) {
+      return `${diffInMinutes}m ago`;
+    }
+
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    return `${diffInHours}h ago`;
+  };
+
+  const formatDuration = (startTime: Date | null, endTime: Date | null): string => {
+    if (!startTime || !endTime) return 'N/A';
+    const durationInSeconds = Math.round((endTime.getTime() - startTime.getTime()) / 1000);
+    if (durationInSeconds < 60) return `${durationInSeconds}s`;
+    const mins = Math.floor(durationInSeconds / 60);
+    const secs = durationInSeconds % 60;
+    return `${mins}m ${secs}s`;
+  };
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((currentUser) => {
       setUser(currentUser);
     });
+
+    // Load last run time from MatchConfigService
+    const loadInitialData = async () => {
+      try {
+        const config = await MatchConfigService.getMatchConfig();
+        if (config.lastRun) {
+          setLastRun(formatTimeAgo(config.lastRun));
+        }
+        if (config.startTime && config.endTime) {
+          setDuration(formatDuration(config.startTime, config.endTime));
+        }
+      } catch (error) {
+        console.error('Error loading initial data:', error);
+      }
+    };
+
+    loadInitialData();
+
     return () => unsubscribe();
   }, []);
 
@@ -39,7 +87,7 @@ const Dashboard: React.FC = () => {
       case 'users':
         return 'User Management';
       case 'match':
-        return 'Match'
+        return 'Matching Dashboard';
       case 'analytics':
         return 'Analytics';
       case 'settings':
@@ -58,26 +106,42 @@ const Dashboard: React.FC = () => {
           <div>
             <h1 style={styles.headerTitle}>{getTabTitle()}</h1>
             <p style={styles.headerSubtitle}>
-              {new Date().toLocaleDateString('en-US', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-              })}
+              {activeTab === 'match' 
+                ? 'Manage and monitor your matching algorithm'
+                : new Date().toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                  })
+              }
             </p>
           </div>
-          <div style={styles.headerActions}>
-            <button style={styles.headerBtn}>📥 Export</button>
-            <button style={{ ...styles.headerBtn, ...styles.primaryBtn }}>
-              + Add New
-            </button>
-          </div>
+          {activeTab === 'match' ? (
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <div style={styles.lastRunBadge}>
+                <span style={{ fontSize: '0.875rem', color: '#666' }}>Last run: </span>
+                <span style={{ fontSize: '0.875rem', color: '#1a1a1a', fontWeight: '600' }}>{lastRun}</span>
+              </div>
+              <div style={styles.lastRunBadge}>
+                <span style={{ fontSize: '0.875rem', color: '#666' }}>Duration: </span>
+                <span style={{ fontSize: '0.875rem', color: '#1a1a1a', fontWeight: '600' }}>{duration}</span>
+              </div>
+            </div>
+          ) : (
+            <div style={styles.headerActions}>
+              <button style={styles.headerBtn}>📥 Export</button>
+              <button style={{ ...styles.headerBtn, ...styles.primaryBtn }}>
+                + Add New
+              </button>
+            </div>
+          )}
         </header>
 
         {/* Tab Content */}
         {activeTab === 'overview' && <Overview />}
         {activeTab === 'users' && <Users />}
-        {activeTab === 'match' && <Match />}
+        {activeTab === 'match' && <Match onLastRunChange={setLastRun} onDurationChange={setDuration} />}
         {activeTab === 'analytics' && <Analytics />}
         {activeTab === 'settings' && <Settings />}
       </main>
@@ -135,6 +199,13 @@ const styles: Styles = {
     background: 'linear-gradient(135deg, #FF6DD9, #8336C7)',
     color: 'white',
     border: 'none',
+  },
+  lastRunBadge: {
+    background: 'white',
+    padding: '12px 20px',
+    borderRadius: '12px',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+    border: '1px solid #e5e7eb',
   },
 };
 

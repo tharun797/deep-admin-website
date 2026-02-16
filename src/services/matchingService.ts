@@ -310,7 +310,11 @@ export class MatchingService {
 
     const batch = writeBatch(this.firestore);
 
-    if (matches[0].score >= 0.6) {
+    // const matchScore = matches[0].score >= 0.6; //production 
+
+     const matchScore = matches[0].score >= 0.4; //test
+
+    if (matchScore) {
       console.info(
         `${MatchingService.TAG}: Setting ${matches[0].profile.id} as current match for user ${id}`
       );
