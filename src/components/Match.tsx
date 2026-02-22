@@ -3,6 +3,7 @@ import { auth, db } from '../firebase';
 import { BatchMatchingService } from '../services/batchMatchingService';
 import { MatchConfigService, MatchConfig } from '../services/matchConfigService';
 import { doc, onSnapshot } from 'firebase/firestore';
+import { ResetMatchesService } from '../services/resetMatchesService';
 
 interface Styles {
   [key: string]: React.CSSProperties;
@@ -76,6 +77,7 @@ const Match: React.FC<MatchProps> = ({ onLastRunChange, onActiveMatchesChange, o
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [isResetting, setIsResetting] = useState<boolean>(false);
   const [progress, setProgress] = useState<MatchConfig | null>(null);
   const [stats, setStats] = useState({
     totalUsers: 0,
@@ -232,6 +234,7 @@ const Match: React.FC<MatchProps> = ({ onLastRunChange, onActiveMatchesChange, o
       console.log('Match triggered by admin:', currentUser.email);
       
       const batchMatchingService = new BatchMatchingService();
+      
       const totalMatches = await batchMatchingService.processAllUsersMatching(currentUser.email);
       
       console.log('Matching completed! Total matches:', totalMatches);
@@ -308,26 +311,20 @@ const Match: React.FC<MatchProps> = ({ onLastRunChange, onActiveMatchesChange, o
   const getProgressPercentage = (): number => {
     if (!progress) return 0;
     
-    // Progress phases:
-    // Initializing: 0-10%
-    // Matching: 10-70% (based on processedUsers / totalUsers)
-    // Processing Unmatched: 70-90%
-    // Finalizing: 90-100%
-    
     switch (progress.progressStatus) {
       case 'initializing':
-        return 5; // Mid-point of 0-10%
+        return 5;
         
       case 'matching':
         { if (!progress.totalUsers) return 10;
         const matchingProgress = (progress.processedUsers || 0) / progress.totalUsers;
-        return 10 + (matchingProgress * 60); } // 10% + (0-60%)
+        return 10 + (matchingProgress * 60); }
         
       case 'processing_unmatched':
-        return 80; // Mid-point of 70-90%
+        return 80;
         
       case 'finalizing':
-        return 95; // Mid-point of 90-100%
+        return 95;
         
       case 'completed':
         return 100;
@@ -371,48 +368,18 @@ const Match: React.FC<MatchProps> = ({ onLastRunChange, onActiveMatchesChange, o
   };
 
   const handleResetMatch = async () => {
-    const currentUser = auth.currentUser;
-    if (!currentUser || !currentUser.email || !ALLOWED_EMAILS.includes(currentUser.email)) {
-      alert(
-        '⚠️ Unauthorized Action\n\n' +
-        'You are not an admin.\n\n' +
-        'Only authorized administrators can reset matching data.'
-      );
-      return;
-    }
-
-    const confirmed = window.confirm(
-      '⚠️ Reset Matching Data\n\n' +
-      'This will reset the last run timestamp and matching statistics.\n\n' +
-      'Are you sure you want to continue?'
-    );
-
-    if (!confirmed) return;
-
     try {
-      await MatchConfigService.updateMatchConfig({
-        lastRun: null,
-        totalMatches: 0,
-        startTime: null,
-        endTime: null,
-        progressStatus: 'idle',
-      });
-
+      setIsResetting(true);
+      const resetMatchesService = new ResetMatchesService();
+      await resetMatchesService.resetAllMatches();
+      // Clear local stats to reflect the reset
       setStats({ totalUsers: 0, activeMatches: 0, unmatchedUsers: 0 });
-      setProgress(null);
-      
-      if (onLastRunChange) {
-        onLastRunChange('Never');
-      }
-
-      if (onDurationChange) {
-        onDurationChange('N/A');
-      }
-
-      alert('✅ Matching data reset successfully!');
+      alert('✅ Reset completed successfully!');
     } catch (error) {
-      console.error('Error resetting match data:', error);
-      alert('❌ Error resetting data. Please check the console for details.');
+      console.error('Error resetting matches:', error);
+      alert('❌ Error resetting matches. Please check the console for details.');
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -439,6 +406,9 @@ const Match: React.FC<MatchProps> = ({ onLastRunChange, onActiveMatchesChange, o
     );
   }
 
+  // Whether any async operation is running
+  const isBusy = isProcessing || isResetting;
+
   return (
     <div style={styles.dashboardContainer}>
       {/* Stats Grid */}
@@ -463,13 +433,13 @@ const Match: React.FC<MatchProps> = ({ onLastRunChange, onActiveMatchesChange, o
             <button 
               style={{
                 ...styles.triggerButton,
-                opacity: isProcessing ? 0.6 : 1,
-                cursor: isProcessing ? 'not-allowed' : 'pointer',
+                opacity: isBusy ? 0.6 : 1,
+                cursor: isBusy ? 'not-allowed' : 'pointer',
               }}
               onClick={handleTriggerMatch}
-              disabled={isProcessing}
+              disabled={isBusy}
               onMouseEnter={(e) => {
-                if (!isProcessing) {
+                if (!isBusy) {
                   e.currentTarget.style.transform = 'scale(1.05)';
                   e.currentTarget.style.boxShadow = '0 12px 32px rgba(131, 54, 199, 0.5)';
                 }
@@ -542,9 +512,9 @@ const Match: React.FC<MatchProps> = ({ onLastRunChange, onActiveMatchesChange, o
         {/* Reset Card */}
         <div style={styles.resetCard}>
           <div style={styles.resetCardContent}>
-            <h3 style={{ fontSize: '1.125rem', color: '#1a1a1a', margin: '0 0 8px 0' }}>
-              Reset Matching Data
-            </h3>
+            <h2 style={{ fontSize: '1.5rem', color: '#1a1a1a', margin: '0 0 8px 0' }}>
+              Reset
+            </h2>
             <p style={{ color: '#666', margin: '0 0 16px 0', fontSize: '0.875rem' }}>
               Clear all matching statistics and history
             </p>
@@ -552,13 +522,13 @@ const Match: React.FC<MatchProps> = ({ onLastRunChange, onActiveMatchesChange, o
             <button 
               style={{
                 ...styles.resetButton,
-                opacity: isProcessing ? 0.4 : 1,
-                cursor: isProcessing ? 'not-allowed' : 'pointer',
+                opacity: isBusy ? 0.4 : 1,
+                cursor: isBusy ? 'not-allowed' : 'pointer',
               }}
               onClick={handleResetMatch}
-              disabled={isProcessing}
+              disabled={isBusy}
               onMouseEnter={(e) => {
-                if (!isProcessing) {
+                if (!isBusy) {
                   e.currentTarget.style.borderColor = '#ef4444';
                   e.currentTarget.style.color = '#ef4444';
                 }
@@ -568,7 +538,14 @@ const Match: React.FC<MatchProps> = ({ onLastRunChange, onActiveMatchesChange, o
                 e.currentTarget.style.color = '#6b7280';
               }}
             >
-              Reset
+              {isResetting ? (
+                <>
+                  <div style={styles.resetSpinner}></div>
+                  <span style={{ marginLeft: '8px' }}>Resetting...</span>
+                </>
+              ) : (
+                <span>Reset</span>
+              )}
             </button>
           </div>
         </div>
@@ -655,6 +632,7 @@ const styles: Styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    minWidth: '140px',
   },
   loader: {
     display: 'flex',
@@ -686,6 +664,15 @@ const styles: Styles = {
     borderTop: '3px solid white',
     borderRadius: '50%',
     animation: 'spin 1s linear infinite',
+  },
+  resetSpinner: {
+    width: '16px',
+    height: '16px',
+    border: '2px solid #e5e7eb',
+    borderTop: '2px solid #ef4444',
+    borderRadius: '50%',
+    animation: 'spin 1s linear infinite',
+    flexShrink: 0,
   },
   processingIndicator: {
     marginTop: '24px',

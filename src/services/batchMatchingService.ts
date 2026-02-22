@@ -14,23 +14,20 @@ import {
 } from "firebase/firestore";
 
 import { MatchingService } from "../services/matchingService";
-import { ResetMatchesService } from "./resetMatchesService";
-import { MatchConfigService } from "./matchConfigService";
+ import { MatchConfigService } from "./matchConfigService";
 import { FirestoreUser, UserPromptStatus } from "../types";
 
 export class BatchMatchingService {
   
   private matchingService: MatchingService;
-  private resetMatchesService: ResetMatchesService;
-  private static readonly TAG = 'EnhancedBatchMatchingService';
+   private static readonly TAG = 'EnhancedBatchMatchingService';
 
   static readonly POTENTIAL_MATCH_MIN_THRESHOLD = 0.5;
   static readonly POTENTIAL_MATCH_MAX_THRESHOLD = 0.59;
 
   constructor() {
     this.matchingService = new MatchingService();
-    this.resetMatchesService = new ResetMatchesService();
-  }
+   }
 
   async processAllUsersMatching(adminEmail: string): Promise<number> {
     let totalMatchedUsers = 0;
@@ -40,7 +37,7 @@ export class BatchMatchingService {
       // Mark matching as started in Firestore
       await MatchConfigService.startMatching(adminEmail);
 
-      await this.resetMatchesService.resetAllMatches();
+     
 
       console.info(
         `${BatchMatchingService.TAG}: Starting enhanced batch matching process for all users`

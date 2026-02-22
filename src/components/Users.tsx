@@ -1,59 +1,133 @@
 import React, { useState, useEffect } from 'react';
 import { FirestoreUser } from '../types';
 import { userService } from '../services/userService';
-import UserDetailModal from './UserDetailModal';
+import UserDetailView from './UserDetailView';
 
-interface Styles {
-  section: React.CSSProperties;
-  header: React.CSSProperties;
-  title: React.CSSProperties;
-  userList: React.CSSProperties;
-  userTile: React.CSSProperties;
-  tileContent: React.CSSProperties;
-  imageContainer: React.CSSProperties;
-  userImage: React.CSSProperties;
-  placeholderImage: React.CSSProperties;
-  userInfo: React.CSSProperties;
-  userName: React.CSSProperties;
-  userEmail: React.CSSProperties;
-  statusBadge: React.CSSProperties;
-  statusActive: React.CSSProperties;
-  statusInactive: React.CSSProperties;
-  verifiedBadge: React.CSSProperties;
-  joinDate: React.CSSProperties;
-  tileActions: React.CSSProperties;
-  actionBtn: React.CSSProperties;
-  editBtn: React.CSSProperties;
-  deleteBtn: React.CSSProperties;
-  loadingContainer: React.CSSProperties;
-  errorContainer: React.CSSProperties;
-  emptyState: React.CSSProperties;
-}
+/* ─────────────────────────────────────────────
+   Helpers
+───────────────────────────────────────────── */
+const formatJoinDate = (date: Date | undefined): string => {
+  if (!date) return 'Unknown';
+  return new Date(date).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+};
 
+const getFirstImage = (user: FirestoreUser): string =>
+  user.images?.filter((img) => img.imagePath && img.imagePath.trim() !== '')[0]
+    ?.imagePath ?? '';
+
+/* ─────────────────────────────────────────────
+   User List
+───────────────────────────────────────────── */
+const UserList: React.FC<{
+  users: FirestoreUser[];
+  onUserClick: (user: FirestoreUser) => void;
+  onEdit: (user: FirestoreUser) => void;
+  onDelete: (userId: string) => void;
+}> = ({ users, onUserClick, onEdit, onDelete }) => (
+  <div style={listStyles.userList}>
+    {users.map((user) => {
+      const userImage = getFirstImage(user);
+      return (
+        <div
+          key={user.id}
+          style={listStyles.userTile}
+          onClick={() => onUserClick(user)}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLDivElement).style.borderColor = '#764ba2';
+            (e.currentTarget as HTMLDivElement).style.boxShadow =
+              '0 4px 16px rgba(118,75,162,0.12)';
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLDivElement).style.borderColor = '#e5e7eb';
+            (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
+          }}
+        >
+          <div style={listStyles.tileContent}>
+            {/* Avatar */}
+            <div style={listStyles.imageContainer}>
+              {userImage ? (
+                <img src={userImage} alt={user.name} style={listStyles.userImage} />
+              ) : (
+                <div style={listStyles.placeholderImage}>
+                  {user.name.charAt(0).toUpperCase()}
+                </div>
+              )}
+            </div>
+
+            {/* Info */}
+            <div style={listStyles.userInfo}>
+              <div style={listStyles.userName}>
+                {user.name}
+                {user.verified && <span style={listStyles.verifiedBadge}>✓</span>}
+              </div>
+              <div style={listStyles.userEmail}>{user.email ?? user.id}</div>
+            </div>
+
+            {/* Status */}
+            <span
+              style={{
+                ...listStyles.statusBadge,
+                ...(user.isOnline ? listStyles.statusActive : listStyles.statusInactive),
+              }}
+            >
+              {user.isOnline ? 'Online' : 'Offline'}
+            </span>
+
+            {/* Join date */}
+            <div style={listStyles.joinDate}>{formatJoinDate(user.createdAt)}</div>
+
+            {/* Actions */}
+            <div style={listStyles.tileActions}>
+              <button
+                onClick={(e) => { e.stopPropagation(); onEdit(user); }}
+                style={{ ...listStyles.actionBtn, ...listStyles.editBtn }}
+              >
+                Edit
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (window.confirm(`Are you sure you want to delete ${user.name}?`)) {
+                    onDelete(user.id);
+                  }
+                }}
+                style={{ ...listStyles.actionBtn, ...listStyles.deleteBtn }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    })}
+  </div>
+);
+
+/* ─────────────────────────────────────────────
+   Root Component
+───────────────────────────────────────────── */
 const Users: React.FC = () => {
   const [users, setUsers] = useState<FirestoreUser[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<FirestoreUser | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
+  useEffect(() => { fetchUsers(); }, []);
 
   const fetchUsers = async () => {
     try {
       setLoading(true);
       setError(null);
       const fetchedUsers = await userService.getAllUsers();
-      
-      // Sort by createdAt (most recent first)
       const sortedUsers = fetchedUsers.sort((a, b) => {
         const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return dateB - dateA;
       });
-      
       setUsers(sortedUsers);
     } catch (err) {
       console.error('Error fetching users:', err);
@@ -63,185 +137,95 @@ const Users: React.FC = () => {
     }
   };
 
-  const handleUserClick = (user: FirestoreUser) => {
-    setSelectedUser(user);
-    setIsModalOpen(true);
-  };
-
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setSelectedUser(null);
-  };
-
   const handleEdit = (user: FirestoreUser) => {
     console.log('Edit user:', user.id);
     // Edit functionality to be implemented
   };
 
   const handleDelete = async (userId: string) => {
-      console.log('Delete user:', userId);
+    console.log('Delete user:', userId);
     // try {
     //   await userService.deleteUser(userId);
-    //   setUsers(users.filter(user => user.id !== userId));
-    //   handleCloseModal();
+    //   setUsers(users.filter(u => u.id !== userId));
+    //   setSelectedUser(null);
     // } catch (err) {
     //   console.error('Error deleting user:', err);
     //   alert('Failed to delete user. Please try again.');
     // }
   };
 
-  const getFirstImage = (user: FirestoreUser): string => {
-    const validImages = user.images?.filter(
-      (img) => img.imagePath && img.imagePath.trim() !== ''
-    ) || [];
-    return validImages[0]?.imagePath || '';
-  };
+  /* ── Detail screen ── */
+  if (selectedUser) {
+    return (
+      <div style={rootStyles.section}>
+        <UserDetailView
+          user={selectedUser}
+          onBack={() => setSelectedUser(null)}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+        />
+      </div>
+    );
+  }
 
-  const formatJoinDate = (date: Date | undefined): string => {
-    if (!date) return 'Unknown';
-    return new Date(date).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
-
+  /* ── Loading ── */
   if (loading) {
     return (
-      <div style={styles.section}>
-        <div style={styles.loadingContainer}>
-          <h3>Loading users...</h3>
-        </div>
+      <div style={rootStyles.section}>
+        <div style={rootStyles.centered}><h3>Loading users...</h3></div>
       </div>
     );
   }
 
+  /* ── Error ── */
   if (error) {
     return (
-      <div style={styles.section}>
-        <div style={styles.errorContainer}>
+      <div style={rootStyles.section}>
+        <div style={{ ...rootStyles.centered, color: '#dc2626', flexDirection: 'column', gap: '1rem' }}>
           <h3>{error}</h3>
-          <button onClick={fetchUsers} style={styles.actionBtn}>
-            Retry
-          </button>
+          <button onClick={fetchUsers} style={listStyles.actionBtn}>Retry</button>
         </div>
       </div>
     );
   }
 
+  /* ── Empty ── */
   if (users.length === 0) {
     return (
-      <div style={styles.section}>
-        <div style={styles.emptyState}>
-          <h3>No users found</h3>
-        </div>
+      <div style={rootStyles.section}>
+        <div style={rootStyles.centered}><h3>No users found</h3></div>
       </div>
     );
   }
 
+  /* ── List view ── */
   return (
-    <>
-      <div style={styles.section}>
-        <div style={styles.header}>
-          <h2 style={styles.title}>Users ({users.length})</h2>
-        </div>
-
-        <div style={styles.userList}>
-          {users.map((user) => {
-            const userImage = getFirstImage(user);
-            
-            return (
-              <div 
-                key={user.id} 
-                style={styles.userTile}
-                onClick={() => handleUserClick(user)}
-              >
-                <div style={styles.tileContent}>
-                  <div style={styles.imageContainer}>
-                    {userImage ? (
-                      <img 
-                        src={userImage} 
-                        alt={user.name} 
-                        style={styles.userImage}
-                      />
-                    ) : (
-                      <div style={styles.placeholderImage}>
-                        {user.name.charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                  </div>
-
-                  <div style={styles.userInfo}>
-                    <div style={styles.userName}>
-                      {user.name}
-                      {user.verified && (
-                        <span style={styles.verifiedBadge}>✓</span>
-                      )}
-                    </div>
-                    <div style={styles.userEmail}>
-                      {user.id || 'No email'}
-                    </div>
-                  </div>
-
-                  <span
-                    style={{
-                      ...styles.statusBadge,
-                      ...(user.isOnline ? styles.statusActive : styles.statusInactive),
-                    }}
-                  >
-                    {user.isOnline ? 'Online' : 'Offline'}
-                  </span>
-
-                  <div style={styles.joinDate}>
-                    {formatJoinDate(user.createdAt)}
-                  </div>
-
-                  <div style={styles.tileActions}>
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEdit(user);
-                      }}
-                      style={{ ...styles.actionBtn, ...styles.editBtn }}
-                    >
-                      Edit
-                    </button>
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (window.confirm(`Are you sure you want to delete ${user.name}?`)) {
-                          handleDelete(user.id);
-                        }
-                      }}
-                      style={{ ...styles.actionBtn, ...styles.deleteBtn }}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+    <div style={rootStyles.section}>
+      <div style={rootStyles.header}>
+        <h2 style={rootStyles.title}>Users ({users.length})</h2>
       </div>
-
-      <UserDetailModal
-        user={selectedUser}
-        isOpen={isModalOpen}
-        onClose={handleCloseModal}
+      <UserList
+        users={users}
+        onUserClick={setSelectedUser}
         onEdit={handleEdit}
         onDelete={handleDelete}
       />
-    </>
+    </div>
   );
 };
 
-const styles: Styles = {
+export default Users;
+
+/* ─────────────────────────────────────────────
+   Styles
+───────────────────────────────────────────── */
+const rootStyles: Record<string, React.CSSProperties> = {
   section: {
     backgroundColor: 'white',
     borderRadius: '16px',
     padding: '1.75rem',
     border: '1px solid #e5e7eb',
+    minHeight: '300px',
   },
   header: {
     marginBottom: '1.5rem',
@@ -251,9 +235,19 @@ const styles: Styles = {
   title: {
     margin: 0,
     fontSize: '1.5rem',
-    fontWeight: '700',
+    fontWeight: 700,
     color: '#1a1d29',
   },
+  centered: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: '3rem',
+    color: '#6b7280',
+  },
+};
+
+const listStyles: Record<string, React.CSSProperties> = {
   userList: {
     display: 'flex',
     flexDirection: 'column',
@@ -296,43 +290,31 @@ const styles: Styles = {
     justifyContent: 'center',
     background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
     fontSize: '1.5rem',
-    fontWeight: '700',
+    fontWeight: 700,
     color: 'white',
   },
-  userInfo: {
-    flex: '1',
-    minWidth: '200px',
-  },
+  userInfo: { flex: 1, minWidth: '200px' },
   userName: {
     fontSize: '1rem',
-    fontWeight: '700',
+    fontWeight: 700,
     color: '#1a1d29',
     marginBottom: '0.25rem',
     display: 'flex',
     alignItems: 'center',
     gap: '0.5rem',
   },
-  userEmail: {
-    fontSize: '0.85rem',
-    color: '#6b7280',
-  },
+  userEmail: { fontSize: '0.85rem', color: '#6b7280' },
   statusBadge: {
     padding: '0.35rem 0.85rem',
     borderRadius: '6px',
     fontSize: '0.75rem',
-    fontWeight: '600',
-    textTransform: 'uppercase',
+    fontWeight: 600,
+    textTransform: 'uppercase' as const,
     letterSpacing: '0.5px',
     flexShrink: 0,
   },
-  statusActive: {
-    backgroundColor: '#d1fae5',
-    color: '#065f46',
-  },
-  statusInactive: {
-    backgroundColor: '#fee2e2',
-    color: '#991b1b',
-  },
+  statusActive: { backgroundColor: '#d1fae5', color: '#065f46' },
+  statusInactive: { backgroundColor: '#fee2e2', color: '#991b1b' },
   verifiedBadge: {
     display: 'inline-flex',
     alignItems: 'center',
@@ -343,24 +325,15 @@ const styles: Styles = {
     background: 'linear-gradient(135deg, #667eea, #764ba2)',
     color: 'white',
     fontSize: '0.65rem',
-    fontWeight: '700',
+    fontWeight: 700,
   },
-  joinDate: {
-    fontSize: '0.85rem',
-    color: '#6b7280',
-    minWidth: '120px',
-    flexShrink: 0,
-  },
-  tileActions: {
-    display: 'flex',
-    gap: '0.5rem',
-    flexShrink: 0,
-  },
+  joinDate: { fontSize: '0.85rem', color: '#6b7280', minWidth: '120px', flexShrink: 0 },
+  tileActions: { display: 'flex', gap: '0.5rem', flexShrink: 0 },
   actionBtn: {
     padding: '0.5rem 1rem',
     borderRadius: '8px',
     fontSize: '0.85rem',
-    fontWeight: '600',
+    fontWeight: 600,
     cursor: 'pointer',
     transition: 'all 0.2s',
     fontFamily: "'Poppins', sans-serif",
@@ -375,28 +348,4 @@ const styles: Styles = {
     color: '#dc2626',
     border: '2px solid #dc2626',
   },
-  loadingContainer: {
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: '3rem',
-    color: '#6b7280',
-  },
-  errorContainer: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '1rem',
-    padding: '3rem',
-    color: '#dc2626',
-  },
-  emptyState: {
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: '3rem',
-    color: '#6b7280',
-  },
 };
-
-export default Users;
