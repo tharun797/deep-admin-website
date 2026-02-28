@@ -11,16 +11,18 @@ interface Styles {
 
 const Analytics: React.FC = () => {
   return (
-    <div style={styles.section}>
-      <div style={styles.placeholder}>
-        <div style={styles.placeholderIcon}>📊</div>
-        <h3 style={styles.placeholderTitle}>Analytics Dashboard</h3>
-        <p style={styles.placeholderText}>
-          Charts and analytics will be displayed here
-        </p>
-        <button style={styles.placeholderBtn}>
-          Coming Soon
-        </button>
+    <div style={{ padding: '0 2rem 2rem 2rem' }}>
+      <div style={styles.section}>
+        <div style={styles.placeholder}>
+          <div style={styles.placeholderIcon}>📊</div>
+          <h3 style={styles.placeholderTitle}>Analytics Dashboard</h3>
+          <p style={styles.placeholderText}>
+            Charts and analytics will be displayed here
+          </p>
+          <button style={styles.placeholderBtn}>
+            Coming Soon
+          </button>
+        </div>
       </div>
     </div>
   );

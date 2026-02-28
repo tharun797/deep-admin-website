@@ -46,7 +46,7 @@ const Overview: React.FC = () => {
   ];
 
   return (
-    <div>
+    <div style={{ padding: '0 2rem 2rem 2rem' }}>
       {/* Stats Grid */}
       <div style={styles.statsGrid}>
         {stats.map((stat, index) => (
@@ -93,6 +93,7 @@ const styles: Styles = {
     gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
     gap: '1.5rem',
     marginBottom: '2rem',
+    padding: '0 0 2rem 0'
   },
   statCard: {
     padding: '1.75rem',
@@ -103,6 +104,7 @@ const styles: Styles = {
     overflow: 'hidden',
   },
   statLabel: {
+
     fontSize: '0.85rem',
     color: '#6b7280',
     fontWeight: '500',
@@ -133,6 +135,7 @@ const styles: Styles = {
     border: '1px solid #e5e7eb',
   },
   sectionTitle: {
+
     fontSize: '1.25rem',
     fontWeight: '700',
     color: '#1a1d29',

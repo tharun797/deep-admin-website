@@ -1,11 +1,11 @@
-import { 
-  collection, 
-  getDocs, 
-  doc, 
-  getDoc, 
-  deleteDoc, 
+import {
+  collection,
+  getDocs,
+  doc,
+  getDoc,
+  deleteDoc,
   updateDoc,
-  DocumentData 
+  DocumentData
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { FirestoreUser, ImageState, UserPromptStatus } from '../types';
@@ -27,42 +27,44 @@ export class UserService {
 
         // Fetch images subcollection
         const images = await this.getUserImages(userId);
-        
+
         // Fetch answered prompts subcollection
         const answeredPrompts = await this.getUserPrompts(userId);
 
-       users.push(
-  new FirestoreUser({
-    id: userId,
-    name: userData.name || 'Unknown',
-    email: userData.email,
-    age: userData.age,
-    gender: userData.gender,
-    pronouns: userData.pronouns,
-    sexuality: userData.sexuality,
-    interestedIn: userData.interestedIn,
-    birthday: userData.birthday?.toDate(),
-    createdAt: userData.createdAt?.toDate(),
-    minAge: userData.minAge,
-    maxAge: userData.maxAge,
-    city: userData.city,
-    isOnline: userData.isOnline || false,
-    verified: userData.verificationStatus === 'verified',
-    isPremium: userData.isPremium || false,
-    markedForDeletion: userData.markedForDeletion || false,
-    currentStep: userData.currentStep,
-    work: userData.work,
-    jobTitle: userData.jobTitle,
-    college: userData.college,
-    educationLevel: userData.educationLevel,
-    religiousBeliefs: userData.religiousBeliefs,
-    politics: userData.politics,
-    languagesSpoken: userData.languagesSpoken,
-    datingIntention: userData.datingIntention,
-    images,
-    answeredPrompts,
-  })
-);
+        users.push(
+          new FirestoreUser({
+            id: userId,
+            name: userData.name || 'Unknown',
+            email: userData.email,
+            age: userData.age,
+            gender: userData.gender,
+            pronouns: userData.pronouns,
+            sexuality: userData.sexuality,
+            interestedIn: userData.interestedIn,
+            birthday: userData.birthday?.toDate(),
+            createdAt: userData.createdAt?.toDate(),
+            minAge: userData.minAge,
+            maxAge: userData.maxAge,
+            city: userData.city,
+            tier: userData.tier,
+            gradingFailed: userData.gradingFailed,
+            isOnline: userData.isOnline || false,
+            verified: userData.verificationStatus === 'verified',
+            isPremium: userData.isPremium || false,
+            markedForDeletion: userData.markedForDeletion || false,
+            currentStep: userData.currentStep,
+            work: userData.work,
+            jobTitle: userData.jobTitle,
+            college: userData.college,
+            educationLevel: userData.educationLevel,
+            religiousBeliefs: userData.religiousBeliefs,
+            politics: userData.politics,
+            languagesSpoken: userData.languagesSpoken,
+            datingIntention: userData.datingIntention,
+            images,
+            answeredPrompts,
+          })
+        );
 
       }
 
@@ -79,7 +81,7 @@ export class UserService {
   async getUserById(userId: string): Promise<FirestoreUser | null> {
     try {
       const userDoc = await getDoc(doc(this.usersCollection, userId));
-      
+
       if (!userDoc.exists()) {
         return null;
       }
@@ -88,7 +90,7 @@ export class UserService {
       const images = await this.getUserImages(userId);
       const answeredPrompts = await this.getUserPrompts(userId);
 
-      return new FirestoreUser ({
+      return new FirestoreUser({
         id: userId,
         name: userData.name || 'Unknown',
         email: userData.email,
@@ -131,13 +133,24 @@ export class UserService {
     try {
       const imagesCollection = collection(db, 'users', userId, 'images');
       const imagesSnapshot = await getDocs(imagesCollection);
-      
-      return imagesSnapshot.docs.map(doc => ({
-        docId: doc.id,
-        imagePath: doc.data().imagePath || '',
-        replacedImagePath: doc.data().replacedImagePath || null,
-        newImagePath: doc.data().newImagePath || null,
-      }));
+
+      return imagesSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          docId: doc.id,
+          imagePath: data.imagePath || '',
+          replacedImagePath: data.replacedImagePath || null,
+          newImagePath: data.newImagePath || null,
+          rank: data.rank != null ? Number(data.rank) : undefined,
+          rankScore: data.rankScore != null ? Number(data.rankScore) : undefined,
+          rankReason: data.rankReason || undefined,
+          rankingSummary: data.rankingSummary || undefined,
+          bestPhotoAdvice: data.bestPhotoAdvice || undefined,
+          rankedAt: data.rankedAt?.toDate() || undefined,
+          rankingFailed: data.rankingFailed || false,
+          rankingFailedReason: data.rankingFailedReason || undefined,
+        };
+      });
     } catch (error) {
       console.error(`Error fetching images for user ${userId}:`, error);
       return [];
@@ -151,7 +164,7 @@ export class UserService {
     try {
       const promptsCollection = collection(db, 'users', userId, 'answeredPrompts');
       const promptsSnapshot = await getDocs(promptsCollection);
-      
+
       return promptsSnapshot.docs.map(doc => ({
         promptId: doc.id,
         answer: doc.data().answer,
@@ -197,12 +210,12 @@ export class UserService {
     try {
       const userRef = doc(this.usersCollection, userId);
       const updateData: DocumentData = { ...data };
-      
+
       // Remove nested objects and arrays that shouldn't be directly updated
       delete updateData.images;
       delete updateData.answeredPrompts;
       delete updateData.id;
-      
+
       await updateDoc(userRef, updateData);
     } catch (error) {
       console.error('Error updating user:', error);

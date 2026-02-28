@@ -6,6 +6,14 @@ export interface ImageState {
   imagePath: string;
   replacedImagePath?: string | null;
   newImagePath?: string | null;
+  rank?: number;
+  rankScore?: number;
+  rankReason?: string;
+  rankingSummary?: string;
+  bestPhotoAdvice?: string;
+  rankedAt?: Date;
+  rankingFailed?: boolean;
+  rankingFailedReason?: string;
 }
 
 export class UserPromptStatus {
@@ -15,7 +23,7 @@ export class UserPromptStatus {
     public answer?: string,
     public lastAskedAt?: Date,
     public nextEligibleAt?: Date
-  ) {}
+  ) { }
 
   static fromFirestore(
     data: Record<string, unknown>,
@@ -67,6 +75,8 @@ export class FirestoreUser {
   sexuality?: string;
   interestedIn?: string[];
   birthday?: Date;
+  tier?: string;
+  gradingFailed?: boolean
   minAge?: number;
   maxAge?: number;
   city?: string;
@@ -87,7 +97,7 @@ export class FirestoreUser {
   createdAt?: Date;
   fcmToken?: string;
   history?: string[];
-  // Collections
+
   images?: ImageState[];
   answeredPrompts?: UserPromptStatus[];
 
@@ -106,6 +116,8 @@ export class FirestoreUser {
     this.city = data.city;
     this.isOnline = data.isOnline;
     this.verified = data.verified;
+    this.tier = data.tier;
+    this.gradingFailed = data.gradingFailed;
     this.isPremium = data.isPremium;
     this.markedForDeletion = data.markedForDeletion;
     this.currentStep = data.currentStep;
@@ -121,12 +133,22 @@ export class FirestoreUser {
     this.fcmToken = data.fcmToken;
     this.history = data.history;
     this.images = data.images;
+    // Sort images by rank (ascending: 1, 2, 3...) ONLY if at least one image has rank data
+    if (this.images && this.images.some(img => img.rank != null)) {
+      this.images.sort((a, b) => {
+        if (a.rank != null && b.rank != null) return a.rank - b.rank;
+        if (a.rank != null) return -1;
+        if (b.rank != null) return 1;
+        return 0;
+      });
+    }
+
     this.answeredPrompts = data.answeredPrompts;
   }
 
-  static fromMap(map: Record<string, unknown>, answeredPrompts: Array<UserPromptStatus>, userId:string, history :  Array<string>,  ): FirestoreUser {
-    
-     
+  static fromMap(map: Record<string, unknown>, answeredPrompts: Array<UserPromptStatus>, userId: string, history: Array<string>,): FirestoreUser {
+
+
 
     // Parse interestedIn if it exists
     let interestedIn: string[] | undefined;
@@ -135,8 +157,8 @@ export class FirestoreUser {
         interestedIn = typeof map.interestedIn === 'string'
           ? JSON.parse(map.interestedIn) as string[]
           : Array.isArray(map.interestedIn)
-          ? map.interestedIn as string[]
-          : undefined;
+            ? map.interestedIn as string[]
+            : undefined;
       } catch (e) {
         console.error('Error parsing interestedIn:', e);
         interestedIn = undefined;
@@ -150,18 +172,41 @@ export class FirestoreUser {
         const imagesList = typeof map.images === 'string'
           ? JSON.parse(map.images)
           : map.images;
-        
+
         images = Array.isArray(imagesList)
           ? imagesList.map((item: unknown) => {
-              const img = item as Record<string, unknown>;
-              return {
-                docId: (img.docId as string) || '',
-                imagePath: (img.imagePath as string) || '',
-                replacedImagePath: (img.replacedImagePath as string) || null,
-                newImagePath: (img.newImagePath as string) || null,
-              };
-            })
+            const img = item as Record<string, unknown>;
+            return {
+              docId: (img.docId as string) || '',
+              imagePath: (img.imagePath as string) || '',
+              replacedImagePath: (img.replacedImagePath as string) || null,
+              newImagePath: (img.newImagePath as string) || null,
+              rank: img.rank != null ? Number(img.rank) : undefined,
+              rankScore: img.rankScore != null ? Number(img.rankScore) : undefined,
+              rankReason: (img.rankReason as string) || undefined,
+              rankingSummary: (img.rankingSummary as string) || undefined,
+              bestPhotoAdvice: (img.bestPhotoAdvice as string) || undefined,
+              rankedAt: img.rankedAt ? new Date(img.rankedAt as string | number | Date) : undefined,
+              rankingFailed: (img.rankingFailed as boolean) || undefined,
+              rankingFailedReason: (img.rankingFailedReason as string) || undefined,
+            };
+          })
           : undefined;
+
+        // Sort images by rank (ascending: 1, 2, 3...) ONLY if at least one image has rank data
+        if (images && images.some(img => img.rank != null)) {
+          images.sort((a, b) => {
+            // If both have ranks, sort by rank
+            if (a.rank != null && b.rank != null) {
+              return a.rank - b.rank;
+            }
+            // If only one has a rank, ranked ones come first
+            if (a.rank != null) return -1;
+            if (b.rank != null) return 1;
+            // If neither has a rank, maintain original order
+            return 0;
+          });
+        }
       } catch (e) {
         console.error('Error parsing images:', e);
         images = undefined;
@@ -175,8 +220,8 @@ export class FirestoreUser {
         pronouns = typeof map.pronouns === 'string'
           ? JSON.parse(map.pronouns) as string[]
           : Array.isArray(map.pronouns)
-          ? map.pronouns as string[]
-          : undefined;
+            ? map.pronouns as string[]
+            : undefined;
       } catch (e) {
         console.error('Error parsing pronouns:', e);
         pronouns = undefined;
@@ -190,8 +235,8 @@ export class FirestoreUser {
         college = typeof map.college === 'string'
           ? JSON.parse(map.college) as string[]
           : Array.isArray(map.college)
-          ? map.college as string[]
-          : undefined;
+            ? map.college as string[]
+            : undefined;
       } catch (e) {
         console.error('Error parsing college:', e);
         college = undefined;
@@ -205,8 +250,8 @@ export class FirestoreUser {
         religiousBeliefs = typeof map.religiousBeliefs === 'string'
           ? JSON.parse(map.religiousBeliefs) as string[]
           : Array.isArray(map.religiousBeliefs)
-          ? map.religiousBeliefs as string[]
-          : undefined;
+            ? map.religiousBeliefs as string[]
+            : undefined;
       } catch (e) {
         console.error('Error parsing religiousBeliefs:', e);
         religiousBeliefs = undefined;
@@ -220,8 +265,8 @@ export class FirestoreUser {
         languagesSpoken = typeof map.languagesSpoken === 'string'
           ? JSON.parse(map.languagesSpoken) as string[]
           : Array.isArray(map.languagesSpoken)
-          ? map.languagesSpoken as string[]
-          : undefined;
+            ? map.languagesSpoken as string[]
+            : undefined;
       } catch (e) {
         console.error('Error parsing languagesSpoken:', e);
         languagesSpoken = undefined;
@@ -237,6 +282,8 @@ export class FirestoreUser {
       pronouns,
       sexuality: map.sexuality as string | undefined,
       interestedIn,
+      tier: map.tier as string | undefined,
+      gradingFailed: map.gradingFailed as boolean | undefined,
       birthday: map.birthday ? new Date(map.birthday as string | number | Date) : undefined,
       minAge: map.minAge != null ? Number(map.minAge) : undefined,
       maxAge: map.maxAge != null ? Number(map.maxAge) : undefined,
@@ -296,8 +343,31 @@ export class FirestoreUser {
             imagePath: (img.imagePath as string) || '',
             replacedImagePath: (img.replacedImagePath as string) || null,
             newImagePath: (img.newImagePath as string) || null,
+            rank: img.rank != null ? Number(img.rank) : undefined,
+            rankScore: img.rankScore != null ? Number(img.rankScore) : undefined,
+            rankReason: (img.rankReason as string) || undefined,
+            rankingSummary: (img.rankingSummary as string) || undefined,
+            bestPhotoAdvice: (img.bestPhotoAdvice as string) || undefined,
+            rankedAt: img.rankedAt ? new Date(img.rankedAt as string | number | Date) : undefined,
+            rankingFailed: (img.rankingFailed as boolean) || undefined,
+            rankingFailedReason: (img.rankingFailedReason as string) || undefined,
           };
         });
+
+        // Sort images by rank (ascending: 1, 2, 3...) ONLY if at least one image has rank data
+        if (images && images.some(img => img.rank != null)) {
+          images.sort((a, b) => {
+            // If both have ranks, sort by rank
+            if (a.rank != null && b.rank != null) {
+              return a.rank - b.rank;
+            }
+            // If only one has a rank, ranked ones come first
+            if (a.rank != null) return -1;
+            if (b.rank != null) return 1;
+            // If neither has a rank, maintain original order
+            return 0;
+          });
+        }
       } catch (e) {
         console.error('Error parsing images:', e);
         images = undefined;
@@ -337,6 +407,8 @@ export class FirestoreUser {
       pronouns,
       sexuality: data.sexuality as string | undefined,
       interestedIn,
+      tier: data.tier as string | undefined,
+      gradingFailed: data.gradingFailed as boolean | undefined,
       birthday: data.birthday ? new Date(data.birthday as string | number | Date) : undefined,
       minAge: data.minAge != null ? Number(data.minAge) : undefined,
       maxAge: data.maxAge != null ? Number(data.maxAge) : undefined,
@@ -362,20 +434,20 @@ export class FirestoreUser {
     });
   }
 
- toMap(): Record<string, unknown> {
-  return {
-    id: this.id,
-    name: this.name,
-    interestedIn: this.interestedIn ?? null,
-    pronouns: this.pronouns ?? null,
-    college: this.college ?? null,
-    religiousBeliefs: this.religiousBeliefs ?? null,
-    languagesSpoken: this.languagesSpoken ?? null,
-    history: this.history ?? [],
-    images: this.images ?? [],
-    answeredPrompts: this.answeredPrompts ?? [],
-  };
-}
+  toMap(): Record<string, unknown> {
+    return {
+      id: this.id,
+      name: this.name,
+      interestedIn: this.interestedIn ?? null,
+      pronouns: this.pronouns ?? null,
+      college: this.college ?? null,
+      religiousBeliefs: this.religiousBeliefs ?? null,
+      languagesSpoken: this.languagesSpoken ?? null,
+      history: this.history ?? [],
+      images: this.images ?? [],
+      answeredPrompts: this.answeredPrompts ?? [],
+    };
+  }
 
 
   toJson(): Record<string, unknown> {

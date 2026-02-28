@@ -7,9 +7,13 @@ import Users from '../components/Users';
 import Analytics from '../components/Analytics';
 import Settings from '../components/Settings';
 import Match from '../components/Match';
+import PhotoGrading from '../components/PhotoGrading';
+import PhotoRanking from '../components/PhotoRanking';
 import { MatchConfigService } from '../services/matchConfigService';
+import { createTestUser } from '../test/createTestUser';
+import AddUserModal from '../components/AddUserModal';
 
-type TabType = 'overview' | 'users' | 'match' | 'analytics' | 'settings';
+type TabType = 'overview' | 'users' | 'match' | 'analytics' | 'settings' | 'grading' | 'ranking';
 
 interface Styles {
   container: React.CSSProperties;
@@ -28,20 +32,15 @@ const Dashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [lastRun, setLastRun] = useState<string>('Never');
   const [duration, setDuration] = useState<string>('N/A');
+  const [isLoadingTestUser, setIsLoadingTestUser] = useState(false);
+  const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
 
   const formatTimeAgo = (date: Date): string => {
     const now = new Date();
     const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-    if (diffInSeconds < 60) {
-      return `${diffInSeconds}s ago`;
-    }
-
+    if (diffInSeconds < 60) return `${diffInSeconds}s ago`;
     const diffInMinutes = Math.floor(diffInSeconds / 60);
-    if (diffInMinutes < 60) {
-      return `${diffInMinutes}m ago`;
-    }
-
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
     const diffInHours = Math.floor(diffInMinutes / 60);
     return `${diffInHours}h ago`;
   };
@@ -60,83 +59,105 @@ const Dashboard: React.FC = () => {
       setUser(currentUser);
     });
 
-    // Load last run time from MatchConfigService
     const loadInitialData = async () => {
       try {
         const config = await MatchConfigService.getMatchConfig();
-        if (config.lastRun) {
-          setLastRun(formatTimeAgo(config.lastRun));
-        }
-        if (config.startTime && config.endTime) {
-          setDuration(formatDuration(config.startTime, config.endTime));
-        }
+        if (config.lastRun) setLastRun(formatTimeAgo(config.lastRun));
+        if (config.startTime && config.endTime) setDuration(formatDuration(config.startTime, config.endTime));
       } catch (error) {
         console.error('Error loading initial data:', error);
       }
     };
 
     loadInitialData();
-
     return () => unsubscribe();
   }, []);
 
-  const getTabTitle = (): string => {
-    switch (activeTab) {
-      case 'overview':
-        return 'Dashboard Overview';
-      case 'users':
-        return 'User Management';
-      case 'match':
-        return 'Matching Dashboard';
-      case 'analytics':
-        return 'Analytics';
-      case 'settings':
-        return 'Settings';
-      default:
-        return 'Dashboard';
+  const handleAddNewTestUser = () => {
+    setIsAddUserModalOpen(true);
+  };
+
+  const handleConfirmAddUser = async (imageUrls: string[]) => {
+    setIsLoadingTestUser(true);
+    try {
+      await createTestUser(imageUrls);
+      alert('Test user created successfully!');
+    } catch (error) {
+      console.error('Error creating test user:', error);
+      alert('Failed to create test user. Check console for details.');
+    } finally {
+      setIsLoadingTestUser(false);
     }
   };
+
+  const getTabTitle = (): string => {
+    switch (activeTab) {
+      case 'overview': return 'Dashboard Overview';
+      case 'users': return 'User Management';
+      case 'match': return 'Matching Dashboard';
+      case 'analytics': return 'Analytics';
+      case 'settings': return 'Settings';
+      case 'grading': return 'Photo Grading';
+      case 'ranking': return 'Photo Ranking';
+      default: return 'Dashboard';
+    }
+  };
+
+  const getTabSubtitle = (): string => {
+    switch (activeTab) {
+      case 'match': return 'Manage and monitor your matching algorithm';
+      case 'grading': return 'AI-powered photo quality grading for user profiles';
+      case 'ranking': return 'Rank user photos from best to worst for optimal profile setup';
+      default: return new Date().toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+    }
+  };
+
+  const showBadges = activeTab === 'match' || activeTab === 'grading' || activeTab === 'ranking';
 
   return (
     <div style={styles.container}>
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} user={user} />
       <main style={styles.main}>
         {/* Header */}
-        <header style={styles.header}>
-          <div>
-            <h1 style={styles.headerTitle}>{getTabTitle()}</h1>
-            <p style={styles.headerSubtitle}>
-              {activeTab === 'match' 
-                ? 'Manage and monitor your matching algorithm'
-                : new Date().toLocaleDateString('en-US', {
-                    weekday: 'long',
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                  })
-              }
-            </p>
-          </div>
-          {activeTab === 'match' ? (
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <div style={styles.lastRunBadge}>
-                <span style={{ fontSize: '0.875rem', color: '#666' }}>Last run: </span>
-                <span style={{ fontSize: '0.875rem', color: '#1a1a1a', fontWeight: '600' }}>{lastRun}</span>
-              </div>
-              <div style={styles.lastRunBadge}>
-                <span style={{ fontSize: '0.875rem', color: '#666' }}>Duration: </span>
-                <span style={{ fontSize: '0.875rem', color: '#1a1a1a', fontWeight: '600' }}>{duration}</span>
-              </div>
+        {activeTab !== 'users' && (
+          <header style={styles.header}>
+            <div>
+              <h1 style={styles.headerTitle}>{getTabTitle()}</h1>
+              <p style={styles.headerSubtitle}>
+                {getTabSubtitle()}
+              </p>
             </div>
-          ) : (
-            <div style={styles.headerActions}>
-              <button style={styles.headerBtn}>📥 Export</button>
-              <button style={{ ...styles.headerBtn, ...styles.primaryBtn }}>
-                + Add New
-              </button>
-            </div>
-          )}
-        </header>
+
+            {showBadges ? (
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <div style={styles.lastRunBadge}>
+                  <span>Last run: </span>
+                  <span style={{ fontWeight: 600 }}>{lastRun}</span>
+                </div>
+                <div style={styles.lastRunBadge}>
+                  <span>Duration: </span>
+                  <span style={{ fontWeight: 600 }}>{duration}</span>
+                </div>
+              </div>
+            ) : (
+              <div style={styles.headerActions}>
+                <button style={styles.headerBtn}>📥 Export</button>
+                <button
+                  style={{ ...styles.headerBtn, ...styles.primaryBtn }}
+                  onClick={handleAddNewTestUser}
+                  disabled={isLoadingTestUser}
+                >
+                  {isLoadingTestUser ? '⏳ Creating...' : '+ Add New'}
+                </button>
+              </div>
+            )}
+          </header>
+        )}
 
         {/* Tab Content */}
         {activeTab === 'overview' && <Overview />}
@@ -144,7 +165,16 @@ const Dashboard: React.FC = () => {
         {activeTab === 'match' && <Match onLastRunChange={setLastRun} onDurationChange={setDuration} />}
         {activeTab === 'analytics' && <Analytics />}
         {activeTab === 'settings' && <Settings />}
+        {activeTab === 'grading' && <PhotoGrading onLastRunChange={setLastRun} onDurationChange={setDuration} />}
+        {activeTab === 'ranking' && <PhotoRanking onLastRunChange={setLastRun} onDurationChange={setDuration} />}
       </main>
+
+      <AddUserModal
+        isOpen={isAddUserModalOpen}
+        onClose={() => setIsAddUserModalOpen(false)}
+        onConfirm={handleConfirmAddUser}
+        isLoading={isLoadingTestUser}
+      />
     </div>
   );
 };
@@ -152,21 +182,26 @@ const Dashboard: React.FC = () => {
 const styles: Styles = {
   container: {
     display: 'flex',
-    minHeight: '100vh',
+    height: '100vh',
     backgroundColor: '#f8f9fa',
     fontFamily: "'Poppins', sans-serif",
   },
   main: {
     flex: 1,
     marginLeft: '280px',
-    padding: '2rem',
+    // padding: '2rem',
     maxWidth: 'calc(100% - 280px)',
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
   },
   header: {
+    padding: '2rem 2rem 0 2rem',
     marginBottom: '2rem',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    flexShrink: 0,
   },
   headerTitle: {
     fontSize: '2rem',

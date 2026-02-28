@@ -36,14 +36,14 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, icon, color }) => (
     position: 'relative',
     overflow: 'hidden',
   }}
-  onMouseEnter={(e) => {
-    e.currentTarget.style.transform = 'translateY(-4px)';
-    e.currentTarget.style.borderColor = '#d1d5db';
-  }}
-  onMouseLeave={(e) => {
-    e.currentTarget.style.transform = 'translateY(0)';
-    e.currentTarget.style.borderColor = '#e5e7eb';
-  }}>
+    onMouseEnter={(e) => {
+      e.currentTarget.style.transform = 'translateY(-4px)';
+      e.currentTarget.style.borderColor = '#d1d5db';
+    }}
+    onMouseLeave={(e) => {
+      e.currentTarget.style.transform = 'translateY(0)';
+      e.currentTarget.style.borderColor = '#e5e7eb';
+    }}>
     <div style={{
       width: '48px',
       height: '48px',
@@ -104,11 +104,11 @@ const Match: React.FC<MatchProps> = ({ onLastRunChange, onActiveMatchesChange, o
       try {
         const config = await MatchConfigService.getMatchConfig();
         setProgress(config);
-        
+
         // Update stats
         if (config.totalMatches) {
-          setStats(prev => ({ 
-            ...prev, 
+          setStats(prev => ({
+            ...prev,
             activeMatches: config.totalMatches,
             unmatchedUsers: config.unmatchedUsers || 0
           }));
@@ -147,7 +147,7 @@ const Match: React.FC<MatchProps> = ({ onLastRunChange, onActiveMatchesChange, o
   const subscribeToProgress = () => {
     // Real-time listener for progress updates
     const configRef = doc(db, 'appConfig', 'matchSettings');
-    
+
     const unsubscribe = onSnapshot(configRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
@@ -178,8 +178,8 @@ const Match: React.FC<MatchProps> = ({ onLastRunChange, onActiveMatchesChange, o
 
           // Update stats
           if (config.totalMatches) {
-            setStats(prev => ({ 
-              ...prev, 
+            setStats(prev => ({
+              ...prev,
               activeMatches: config.totalMatches,
               unmatchedUsers: config.unmatchedUsers || 0
             }));
@@ -226,22 +226,22 @@ const Match: React.FC<MatchProps> = ({ onLastRunChange, onActiveMatchesChange, o
     }
 
     setIsProcessing(true);
-    
+
     // Subscribe to real-time progress updates
     subscribeToProgress();
 
     try {
       console.log('Match triggered by admin:', currentUser.email);
-      
+
       const batchMatchingService = new BatchMatchingService();
-      
+
       const totalMatches = await batchMatchingService.processAllUsersMatching(currentUser.email);
-      
+
       console.log('Matching completed! Total matches:', totalMatches);
-      
+
       // Get the updated config
       const config = await MatchConfigService.getMatchConfig();
-      
+
       if (config.lastRun && onLastRunChange) {
         onLastRunChange(formatTimeAgo(config.lastRun));
       }
@@ -255,20 +255,20 @@ const Match: React.FC<MatchProps> = ({ onLastRunChange, onActiveMatchesChange, o
       }
 
       // Update local stats
-      setStats(prev => ({ 
-        ...prev, 
+      setStats(prev => ({
+        ...prev,
         activeMatches: totalMatches,
         unmatchedUsers: config.unmatchedUsers || 0
       }));
 
-      const duration = config.startTime && config.endTime 
+      const duration = config.startTime && config.endTime
         ? Math.round((config.endTime.getTime() - config.startTime.getTime()) / 1000)
         : 0;
 
       const minutes = Math.floor(duration / 60);
       const seconds = duration % 60;
       const timeStr = duration > 0 ? `${minutes}m ${seconds}s` : 'N/A';
-      
+
       alert(
         `✅ Matching Completed Successfully!\n\n` +
         `Total matches created: ${totalMatches}\n` +
@@ -289,7 +289,7 @@ const Match: React.FC<MatchProps> = ({ onLastRunChange, onActiveMatchesChange, o
 
   const getProgressMessage = (): string => {
     if (!progress) return '';
-    
+
     switch (progress.progressStatus) {
       case 'initializing':
         return 'Loading user profiles...';
@@ -310,25 +310,27 @@ const Match: React.FC<MatchProps> = ({ onLastRunChange, onActiveMatchesChange, o
 
   const getProgressPercentage = (): number => {
     if (!progress) return 0;
-    
+
     switch (progress.progressStatus) {
       case 'initializing':
         return 5;
-        
+
       case 'matching':
-        { if (!progress.totalUsers) return 10;
-        const matchingProgress = (progress.processedUsers || 0) / progress.totalUsers;
-        return 10 + (matchingProgress * 60); }
-        
+        {
+          if (!progress.totalUsers) return 10;
+          const matchingProgress = (progress.processedUsers || 0) / progress.totalUsers;
+          return 10 + (matchingProgress * 60);
+        }
+
       case 'processing_unmatched':
         return 80;
-        
+
       case 'finalizing':
         return 95;
-        
+
       case 'completed':
         return 100;
-        
+
       default:
         return 0;
     }
@@ -429,8 +431,8 @@ const Match: React.FC<MatchProps> = ({ onLastRunChange, onActiveMatchesChange, o
             <p style={{ color: '#666', margin: '0 0 24px 0', fontSize: '0.95rem' }}>
               Process all users and generate new matches based on compatibility scores
             </p>
-            
-            <button 
+
+            <button
               style={{
                 ...styles.triggerButton,
                 opacity: isBusy ? 0.6 : 1,
@@ -464,7 +466,7 @@ const Match: React.FC<MatchProps> = ({ onLastRunChange, onActiveMatchesChange, o
                 {/* Progress Bar */}
                 <div style={styles.progressBarContainer}>
                   <div style={styles.progressBar}>
-                    <div 
+                    <div
                       style={{
                         ...styles.progressFill,
                         width: `${getProgressPercentage()}%`,
@@ -518,8 +520,8 @@ const Match: React.FC<MatchProps> = ({ onLastRunChange, onActiveMatchesChange, o
             <p style={{ color: '#666', margin: '0 0 16px 0', fontSize: '0.875rem' }}>
               Clear all matching statistics and history
             </p>
-            
-            <button 
+
+            <button
               style={{
                 ...styles.resetButton,
                 opacity: isBusy ? 0.4 : 1,
@@ -566,7 +568,7 @@ const styles: Styles = {
   dashboardContainer: {
     minHeight: '100vh',
     width: '100%',
-    padding: '0',
+    padding: '0 2rem 2rem 2rem',
     boxSizing: 'border-box',
   },
   statsGrid: {

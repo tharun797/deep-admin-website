@@ -5,7 +5,7 @@ import { User } from 'firebase/auth';
 import LifeLine from '../assets/life-line.svg';
 
 
-type TabType = 'overview' | 'users' |'match' | 'analytics' | 'settings';
+type TabType = 'overview' | 'users' | 'match' | 'analytics' | 'settings' | 'grading' | 'ranking';
 
 interface SidebarProps {
   activeTab: TabType;
@@ -43,18 +43,18 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, user }) => {
   return (
     <aside style={styles.sidebar}>
       <div style={styles.logo}>
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%' }}> <img
-          src={LifeLine}
-          alt="LifeLine"
-          style={{
-            width: '20%',
-            height: '20%',
-            filter: 'brightness(0) saturate(100%) invert(100%) sepia(0%) saturate(0%) hue-rotate(93deg) brightness(104%) contrast(104%)',
-            opacity: 0.8,
-          }}
-        /></div>
-        {/* <span style={styles.logoText}>Deep Admin</span> */}
-        
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%' }}>
+          <img
+            src={LifeLine}
+            alt="LifeLine"
+            style={{
+              width: '20%',
+              height: '20%',
+              filter: 'brightness(0) saturate(100%) invert(100%) sepia(0%) saturate(0%) hue-rotate(93deg) brightness(104%) contrast(104%)',
+              opacity: 0.8,
+            }}
+          />
+        </div>
       </div>
 
       <nav style={styles.nav}>
@@ -68,6 +68,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, user }) => {
           <span style={styles.navIcon}>📊</span>
           Overview
         </button>
+
         <button
           onClick={() => setActiveTab('users')}
           style={{
@@ -78,7 +79,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, user }) => {
           <span style={styles.navIcon}>👥</span>
           Users
         </button>
-         <button
+
+        <button
           onClick={() => setActiveTab('match')}
           style={{
             ...styles.navItem,
@@ -88,6 +90,29 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, user }) => {
           <span style={styles.navIcon}>🎯</span>
           Match
         </button>
+
+        <button
+          onClick={() => setActiveTab('grading')}
+          style={{
+            ...styles.navItem,
+            ...(activeTab === 'grading' ? styles.navItemActive : {}),
+          }}
+        >
+          <span style={styles.navIcon}>📸</span>
+          Photo Grading
+        </button>
+
+        <button
+          onClick={() => setActiveTab('ranking')}
+          style={{
+            ...styles.navItem,
+            ...(activeTab === 'ranking' ? styles.navItemActive : {}),
+          }}
+        >
+          <span style={styles.navIcon}>🎬</span>
+          Photo Ranking
+        </button>
+
         <button
           onClick={() => setActiveTab('analytics')}
           style={{
@@ -98,6 +123,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, user }) => {
           <span style={styles.navIcon}>📈</span>
           Analytics
         </button>
+
         <button
           onClick={() => setActiveTab('settings')}
           style={{
@@ -139,6 +165,7 @@ const styles: Styles = {
     height: '100vh',
     left: 0,
     top: 0,
+    zIndex: 1000,
   },
   logo: {
     padding: '2rem 1.5rem',
@@ -169,6 +196,7 @@ const styles: Styles = {
     display: 'flex',
     flexDirection: 'column',
     gap: '0.5rem',
+    overflowY: 'auto',
   },
   navItem: {
     display: 'flex',
@@ -185,6 +213,7 @@ const styles: Styles = {
     transition: 'all 0.2s',
     textAlign: 'left',
     fontFamily: "'Poppins', sans-serif",
+    whiteSpace: 'nowrap',
   },
   navItemActive: {
     backgroundColor: 'rgba(255,109,217,0.15)',
@@ -192,10 +221,12 @@ const styles: Styles = {
   },
   navIcon: {
     fontSize: '1.25rem',
+    minWidth: '1.25rem',
   },
   sidebarFooter: {
     padding: '1.5rem',
     borderTop: '1px solid rgba(255,255,255,0.1)',
+    marginTop: 'auto',
   },
   userProfile: {
     display: 'flex',
@@ -213,6 +244,7 @@ const styles: Styles = {
     justifyContent: 'center',
     fontWeight: '600',
     fontSize: '1rem',
+    flexShrink: 0,
   },
   userName: {
     fontSize: '0.9rem',
@@ -238,7 +270,7 @@ const styles: Styles = {
     fontWeight: '500',
     cursor: 'pointer',
     transition: 'all 0.2s',
-    fontFamily: "'Poppins', sans-serif'",
+    fontFamily: "'Poppins', sans-serif",
   },
 };
 

@@ -11,16 +11,18 @@ interface Styles {
 
 const Settings: React.FC = () => {
   return (
-    <div style={styles.section}>
-      <div style={styles.placeholder}>
-        <div style={styles.placeholderIcon}>⚙️</div>
-        <h3 style={styles.placeholderTitle}>Settings</h3>
-        <p style={styles.placeholderText}>
-          Application settings and configurations
-        </p>
-        <button style={styles.placeholderBtn}>
-          Coming Soon
-        </button>
+    <div style={{ padding: '0 2rem 2rem 2rem' }}>
+      <div style={styles.section}>
+        <div style={styles.placeholder}>
+          <div style={styles.placeholderIcon}>⚙️</div>
+          <h3 style={styles.placeholderTitle}>Settings</h3>
+          <p style={styles.placeholderText}>
+            Application settings and configurations
+          </p>
+          <button style={styles.placeholderBtn}>
+            Coming Soon
+          </button>
+        </div>
       </div>
     </div>
   );
