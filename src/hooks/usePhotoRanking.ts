@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { auth, db } from '../firebase';
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
-import { GoogleAiService, RankingResult, PhotoRanking } from '../services/googleAiService';
+import { GoogleAiService, RankingResult } from '../services/googleAiService';
 import { GenerateRankingPrompt } from '../utils/generateRankingPrompt';
 import { ImageState } from '../types';
 
